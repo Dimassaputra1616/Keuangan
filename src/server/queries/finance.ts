@@ -3,6 +3,7 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { monthToRange, type MonthKey } from "@/lib/date";
+import { accountBalanceOf, safeSum } from "@/lib/money";
 import type { TransactionKind } from "@/lib/types";
 
 /**
@@ -41,7 +42,17 @@ export async function getMonthSummary(monthKey: MonthKey): Promise<MonthSummary>
     else expense += total;
   }
 
-  return { income, expense, net: income - expense, transactionCount };
+  // `safeSum` dipakai untuk penjumlahan turunan (bukan kolom DB) supaya tidak
+  // mungkin meleset melewati batas angka yang aman, lihat catatan di `money.ts`.
+  const safeIncome = safeSum([income]);
+  const safeExpense = safeSum([expense]);
+
+  return {
+    income: safeIncome,
+    expense: safeExpense,
+    net: safeIncome - safeExpense,
+    transactionCount,
+  };
 }
 
 export type CategoryBreakdownRow = {
@@ -161,8 +172,9 @@ export async function getAccountBalances(
 
   for (const row of grouped) {
     const current = totals.get(row.accountId) ?? { income: 0, expense: 0 };
-    if (row.kind === "INCOME") current.income += row._sum.amount ?? 0;
-    else current.expense += row._sum.amount ?? 0;
+    // Penumpukan per akun juga dijaga agar tetap di dalam rentang angka aman.
+    if (row.kind === "INCOME") current.income = safeSum([current.income, row._sum.amount ?? 0]);
+    else current.expense = safeSum([current.expense, row._sum.amount ?? 0]);
     totals.set(row.accountId, current);
   }
 
@@ -184,7 +196,15 @@ export async function getAccountBalances(
       expense,
       transferIn,
       transferOut,
-      balance: account.initialBalance + income - expense + transferIn - transferOut,
+      // Rumus saldo dihitung lewat `accountBalanceOf` supaya hanya ada satu
+      // definisi di seluruh aplikasi dan penjumlahannya aman.
+      balance: accountBalanceOf({
+        initialBalance: account.initialBalance,
+        income,
+        expense,
+        transferIn,
+        transferOut,
+      }),
       isArchived: account.isArchived,
     };
   });

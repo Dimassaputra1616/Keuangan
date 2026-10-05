@@ -2,8 +2,12 @@
 
 import { useActionState } from "react";
 import {
+  ACCOUNT_PURPOSE_HINTS,
+  ACCOUNT_PURPOSE_LABELS,
+  ACCOUNT_PURPOSES,
   ACCOUNT_TYPES,
   ACCOUNT_TYPE_LABELS,
+  type AccountPurpose,
   type AccountType,
   type ActionResult,
 } from "@/lib/types";
@@ -23,6 +27,8 @@ export type AccountDefaults = {
   id: string;
   name: string;
   type: AccountType;
+  /** `undefined` berarti belum ditentukan; disimpan sebagai `null`. */
+  purpose?: AccountPurpose | null;
   initialBalance: number;
 };
 
@@ -79,6 +85,32 @@ export function AccountForm({
           {ACCOUNT_TYPES.map((type) => (
             <option key={type} value={type}>
               {ACCOUNT_TYPE_LABELS[type]}
+            </option>
+          ))}
+        </Select>
+      </FormField>
+
+      {/*
+        Peran akun menentukan apakah saldonya masuk hitungan "uang aman
+        digunakan". Tanpa ini, Dana Darurat dan Dana Tujuan tidak akan pernah
+        bisa dipisahkan dari uang harian.
+      */}
+      <FormField
+        label="Peran akun"
+        htmlFor="purpose"
+        errors={errors?.purpose}
+        hint={`${ACCOUNT_PURPOSE_HINTS.LIQUID}. Pilih "Dana Darurat" atau "Dana Tujuan" agar tidak ikut terpotong dari uang yang boleh dibelanjakan.`}
+      >
+        <Select
+          id="purpose"
+          name="purpose"
+          defaultValue={account?.purpose ?? ""}
+          invalid={Boolean(errors?.purpose)}
+        >
+          <option value="">Belum ditentukan</option>
+          {ACCOUNT_PURPOSES.map((purpose) => (
+            <option key={purpose} value={purpose}>
+              {ACCOUNT_PURPOSE_LABELS[purpose]} — {ACCOUNT_PURPOSE_HINTS[purpose]}
             </option>
           ))}
         </Select>

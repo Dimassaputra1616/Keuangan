@@ -112,3 +112,54 @@ export function percentage(part: number, total: number): number {
   if (total <= 0) return 0;
   return Math.round((part / total) * 1000) / 10;
 }
+
+/** Rentang aman untuk nilai turunan (saldo, total kekayaan), bukan kolom DB. */
+export const MAX_SAFE_RUPIAH = Number.MAX_SAFE_INTEGER;
+
+/**
+ * Jumlahkan nominal tanpa keluar dari rentang angka yang aman.
+ *
+ * Setiap `Transaction.amount` sudah dijaga ≤ `MAX_RUPIAH` oleh validasi, tapi
+ * SALDO AKUN adalah hasil penjumlahan banyak transaksi. Satu akun dengan
+ * beberapa transaksi besar bisa melewati batas `Int` 32-bit, dan karena saldo
+ * ikut dipakai untuk menentukan total kekayaan, angka yang meleset di sini
+ * langsung merusak laporan — bukan sekadar tampil salah.
+ *
+ * Batasnya penting: penjumlahan dijaga tetap di dalam rentang
+ * `Number.MAX_SAFE_INTEGER`, jadi tidak ada pembulatan diam-diam yang membuat
+ * angka rupiah berbeda beberapa satuan dari nilai sebenarnya.
+ */
+export function safeSum(values: number[]): number {
+  let total = 0;
+
+  for (const value of values) {
+    total += value;
+    if (total > MAX_SAFE_RUPIAH || total < -MAX_SAFE_RUPIAH) {
+      return total > 0 ? MAX_SAFE_RUPIAH : -MAX_SAFE_RUPIAH;
+    }
+  }
+
+  return total;
+}
+
+/**
+ * Susun saldo akun dari komponen-komponennya, dengan penjumlahan aman.
+ *
+ * Dihitung di satu tempat supaya rumus saldo tidak lagi diulang di beberapa
+ * query dan tidak bisa berbeda antar halaman.
+ */
+export function accountBalanceOf(parts: {
+  initialBalance: number;
+  income: number;
+  expense: number;
+  transferIn: number;
+  transferOut: number;
+}): number {
+  return safeSum([
+    parts.initialBalance,
+    parts.income,
+    -parts.expense,
+    parts.transferIn,
+    -parts.transferOut,
+  ]);
+}

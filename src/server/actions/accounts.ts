@@ -9,6 +9,7 @@ function readAccountForm(formData: FormData) {
   return {
     name: formData.get("name"),
     type: formData.get("type"),
+    purpose: formData.get("purpose") ?? "",
     initialBalance: formData.get("initialBalance") ?? "",
   };
 }
@@ -31,6 +32,7 @@ export async function createAccount(
       data: {
         name: parsed.data.name,
         type: parsed.data.type,
+        purpose: parsed.data.purpose,
         initialBalance: parsed.data.initialBalance,
       },
     });
@@ -67,6 +69,7 @@ export async function updateAccount(
       data: {
         name: parsed.data.name,
         type: parsed.data.type,
+        purpose: parsed.data.purpose,
         initialBalance: parsed.data.initialBalance,
       },
     });
@@ -90,22 +93,41 @@ export async function toggleArchiveAccount(
   }
 
   try {
-    const account = await db.account.findUnique({
-      where: { id: idParsed.data.accountId },
-      select: { isArchived: true },
+    // Pembacaan dan penulisan dalam satu transaksi: kalau tidak, dua klik
+    // hampir bersamaan bisa sama-sama membaca `isArchived` yang sama lalu
+    // sama-sama menulis nilai yang sama, sehingga status akhir bukan yang
+    // pengguna maksud (lihat aturan check-then-act di `AGENTS.md` §3.1).
+    const outcome = await db.$transaction(async (tx) => {
+      const account = await tx.account.findUnique({
+        where: { id: idParsed.data.accountId },
+        select: { isArchived: true },
+      });
+
+      if (!account) {
+        return {
+          status: "error",
+          error: actionError("Akun tidak ditemukan."),
+        } as const;
+      }
+
+      await tx.account.update({
+        where: { id: idParsed.data.accountId },
+        data: { isArchived: !account.isArchived },
+      });
+
+      // Nilai lama dikembalikan supaya pesan di bawah memakai keadaan yang
+      // benar-benar dibaca di dalam transaksi.
+      return { status: "ok", wasArchived: account.isArchived } as const;
     });
 
-    if (!account) return actionError("Akun tidak ditemukan.");
-
-    await db.account.update({
-      where: { id: idParsed.data.accountId },
-      data: { isArchived: !account.isArchived },
-    });
+    if (outcome.status === "error") return outcome.error;
 
     revalidateFinancePages();
     return {
       ok: true,
-      message: account.isArchived ? "Akun berhasil diaktifkan." : "Akun berhasil diarsipkan.",
+      message: outcome.wasArchived
+        ? "Akun berhasil diaktifkan."
+        : "Akun berhasil diarsipkan.",
     };
   } catch (error) {
     return actionError(describePrismaError(error));
@@ -113,8 +135,12 @@ export async function toggleArchiveAccount(
 }
 
 /**
- * Hapus akun. Diblokir bila masih ada transaksi yang merujuknya, karena
- * foreign key memakai `onDelete: Restrict`.
+ * Hapus akun. Diblokir bila masih ada transaksi atau transfer yang merujuknya,
+ * karena kedua relasi memakai `onDelete: Restrict`.
+ *
+ * Perhitungannya harus memuat transfer juga: kalau hanya transaksi yang
+ * dihitung, akun yang hanya pernah dipakai transfer akan lolos pemeriksaan lalu
+ * ditolak database, dan pesan error foreign key apa adanya membingungkan.
  */
 export async function deleteAccount(
   _previous: ActionResult,
@@ -129,15 +155,31 @@ export async function deleteAccount(
   const id = idParsed.data.accountId;
 
   try {
-    const usage = await db.transaction.count({ where: { accountId: id } });
+    const outcome = await db.$transaction(async (tx) => {
+      const [usage, transferUsage] = await Promise.all([
+        tx.transaction.count({ where: { accountId: id } }),
+        tx.transfer.count({
+          where: { OR: [{ fromAccountId: id }, { toAccountId: id }] },
+        }),
+      ]);
 
-    if (usage > 0) {
-      return actionError(
-        `Akun masih dipakai oleh ${usage} transaksi sehingga tidak bisa dihapus. Arsipkan sebagai gantinya.`,
-      );
-    }
+      const total = usage + transferUsage;
 
-    await db.account.delete({ where: { id } });
+      if (total > 0) {
+        return {
+          status: "error",
+          error: actionError(
+            `Akun masih dipakai oleh ${total} catatan sehingga tidak bisa dihapus. Arsipkan sebagai gantinya.`,
+          ),
+        } as const;
+      }
+
+      await tx.account.delete({ where: { id } });
+
+      return { status: "ok" } as const;
+    });
+
+    if (outcome.status === "error") return outcome.error;
 
     revalidateFinancePages();
     return { ok: true, message: "Akun berhasil dihapus." };

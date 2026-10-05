@@ -1,7 +1,9 @@
 import { z } from "zod";
 import {
+  isAccountPurpose,
   isAccountType,
   isTransactionKind,
+  type AccountPurpose,
   type AccountType,
   type TransactionKind,
 } from "@/lib/types";
@@ -26,6 +28,31 @@ export const accountTypeSchema = z
   .string({ required_error: "Tipe akun wajib dipilih." })
   .refine(isAccountType, { message: "Tipe akun tidak dikenal." })
   .transform((value) => value as AccountType);
+
+/**
+ * Peran akun: `LIQUID` / `SAVINGS` / `GOAL_FUND` / `EMERGENCY`.
+ *
+ * Nilai kosong berarti "belum ditentukan" dan disimpan sebagai `null`, bukan
+ * `LIQUID`. Alasannya kolomnya nullable supaya akun lama yang dibuat sebelum
+ * fitur ini tetap terbaca sebagai belum ditentukan, dan `resolvePurpose()`
+ * yang memutuskan perlakuannya — bukan form yang menebak-nebak.
+ */
+export const accountPurposeSchema = z
+  .string()
+  .transform((value) => value.trim())
+  .transform((value, ctx) => {
+    if (value === "") return null;
+
+    if (!isAccountPurpose(value)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Peran akun tidak dikenal.",
+      });
+      return z.NEVER;
+    }
+
+    return value as AccountPurpose;
+  });
 
 /**
  * Nominal transaksi: wajib positif, sudah dibersihkan dari pemisah ribuan.

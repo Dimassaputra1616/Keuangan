@@ -2,7 +2,14 @@ import Link from "next/link";
 import { createAccount, updateAccount } from "@/server/actions/accounts";
 import { getAccountBalances, getAccountsWithUsage } from "@/server/queries/finance";
 import { formatRupiah } from "@/lib/money";
-import { ACCOUNT_TYPE_LABELS, isAccountType, type AccountType } from "@/lib/types";
+import {
+  ACCOUNT_PURPOSE_LABELS,
+  ACCOUNT_TYPE_LABELS,
+  isAccountPurpose,
+  isAccountType,
+  type AccountPurpose,
+  type AccountType,
+} from "@/lib/types";
 import { IconPlus, IconWallet } from "@/components/Icons";
 import { AccountForm } from "@/components/accounts/AccountForm";
 import {
@@ -91,6 +98,12 @@ export default async function AccountsPage() {
                             · Saldo awal {formatRupiah(account.initialBalance)} ·{" "}
                             {account.transactionCount} transaksi
                             </p>
+                            {isAccountPurpose(account.purpose) ? (
+                            <p className="mt-1 text-xs text-subtle-foreground">
+                              Peran:{" "}
+                              {ACCOUNT_PURPOSE_LABELS[account.purpose as AccountPurpose]}
+                            </p>
+                            ) : null}
                           </div>
                       </div>
 
@@ -117,6 +130,9 @@ export default async function AccountsPage() {
                               id: account.id,
                               name: account.name,
                               type: account.type as AccountType,
+                              purpose: isAccountPurpose(account.purpose)
+                                ? (account.purpose as AccountPurpose)
+                                : null,
                               initialBalance: account.initialBalance,
                             }}
                           />

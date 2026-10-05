@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { toUtcMidnight } from "@/lib/date";
 import { transferFormSchema, transferIdSchema } from "@/lib/validations";
@@ -30,15 +31,17 @@ function readTransferForm(formData: FormData) {
 /**
  * Pastikan kedua akun ada dan belum diarsipkan.
  *
- * Diperiksa di dalam transaksi yang sama dengan penulisan (lihat aturan
- * check-then-act di `AGENTS.md` §3.1) supaya kondisi arsip tidak berubah di
- * antara pengecekan dan penyimpanan.
+ * Membaca lewat `client` transaksi, bukan `db` global, supaya bisa dipanggil
+ * dari dalam callback `$transaction`. Validasi ini menentukan boleh/tidaknya
+ * penulisan, jadi sesuai `AGENTS.md` §3.1 pembacaannya WAJIB terjadi di
+ * transaksi yang sama dengan penyimpanan.
  */
 async function validateAccounts(
   fromAccountId: string,
   toAccountId: string,
+  client: Pick<Prisma.TransactionClient, "account"> = db,
 ): Promise<ActionResult | null> {
-  const accounts = await db.account.findMany({
+  const accounts = await client.account.findMany({
     where: { id: { in: [fromAccountId, toAccountId] } },
     select: { id: true, name: true, isArchived: true },
   });
@@ -101,19 +104,27 @@ export async function createTransfer(
     return actionError("Tanggal tidak valid.", { date: ["Tanggal tidak valid."] });
   }
 
-  const relationError = await validateAccounts(fromAccountId, toAccountId);
-  if (relationError) return relationError;
-
   try {
-    await db.transfer.create({
-      data: {
-        amount,
-        occurredAt,
-        notes: notes.length > 0 ? notes : null,
-        fromAccountId,
-        toAccountId,
-      },
+    // Validasi akun DI DALAM transaksi yang sama dengan penulisan, sesuai
+    // aturan check-then-act di `AGENTS.md` §3.1.
+    const outcome = await db.$transaction(async (tx) => {
+      const relationError = await validateAccounts(fromAccountId, toAccountId, tx);
+      if (relationError) return { status: "error", error: relationError } as const;
+
+      await tx.transfer.create({
+        data: {
+          amount,
+          occurredAt,
+          notes: notes.length > 0 ? notes : null,
+          fromAccountId,
+          toAccountId,
+        },
+      });
+
+      return { status: "ok" } as const;
     });
+
+    if (outcome.status === "error") return outcome.error;
   } catch (error) {
     return actionError(describePrismaError(error));
   }

@@ -120,12 +120,33 @@ export function monthToRange(monthKey: MonthKey): { start: Date; end: Date } {
   };
 }
 
-/** Geser key bulan sejumlah bulan, positif ke depan negatif ke belakang. */
+/** Rentang tahun yang boleh dipakai sebagai key bulan. */
+export const MIN_MONTH_YEAR = 1900;
+export const MAX_MONTH_YEAR = 2999;
+
+/**
+ * Geser key bulan sejumlah bulan, positif ke depan negatif ke belakang.
+ *
+ * Hasilnya di-clamp ke rentang tahun yang valid. Tanpa clamp, menggeser dari
+ * `1900-01` ke belakang menghasilkan `1899-12`, yang `parseMonthKey()` tolak
+ * sebagai tidak valid — dan `monthToRange()` lalu diam-diam memakai bulan
+ * BERJALAN. Akibatnya user menekan "Bulan lalu" berulang kali dan selalu
+ * melihat data bulan yang sama tanpa tahu apa yang terjadi.
+ */
 export function shiftMonth(monthKey: MonthKey, delta: number): MonthKey {
   const { year, month } = parseMonthKey(monthKey) ?? parseMonthKey(getCurrentMonthKey())!;
-  const shifted = new Date(Date.UTC(year, month - 1 + delta, 1));
 
-  return `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}`;
+  // Dihitung sebagai indeks bulan absolut lalu dikonversi balik, bukan dengan
+  // mengoreksi tahun/bulan terpisah. Cara kedua rawan: menggeser `1900-01` ke
+  // belakang menghasilkan tahun `1899` dan bulan `12`, dan kalau hanya tahun
+  // yang di-clamp hasilnya jadi `1900-12` — bulan yang benar-benar tidak ada
+  // hubungannya dengan posisi awal.
+  const minIndex = MIN_MONTH_YEAR * 12;
+  const maxIndex = MAX_MONTH_YEAR * 12 + 11;
+
+  const index = Math.min(maxIndex, Math.max(minIndex, year * 12 + (month - 1) + delta));
+
+  return `${Math.floor(index / 12)}-${pad((index % 12) + 1)}`;
 }
 
 /** Label bulan Bahasa Indonesia, contoh `Oktober 2026`. */
@@ -150,6 +171,11 @@ export function toUtcMidnight(dateInput: string | null | undefined): Date | null
   const month = Number(match[2]);
   const day = Number(match[3]);
   if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+
+  // `Date.UTC` memperlakukan tahun 0-99 sebagai 1900-1999, jadi `0099` akan
+  // diam-diam menjadi 1999. Tahun di bawah 100 ditolak eksplisit, dan rentang
+  // yang jauh ke depan juga dibatasi supaya tidak menabrak batas Date.
+  if (year < MIN_MONTH_YEAR || year > MAX_MONTH_YEAR) return null;
 
   const date = new Date(Date.UTC(year, month - 1, day));
   const isRealCalendarDate =

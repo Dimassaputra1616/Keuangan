@@ -104,6 +104,55 @@ describe("toUtcMidnight", () => {
   });
 });
 
+describe("shiftMonth menjaga hasil tetap dalam rentang tahun yang sah", () => {
+  // Regression: `shiftMonth("1900-01", -1)` pernah menghasilkan "1899-12",
+  // yang `parseMonthKey()` tolak. `monthToRange()` lalu jatuh diam-diam ke bulan
+  // BERJALAN, jadi user menekan "Bulan lalu" terus tapi datanya tidak berubah.
+  it("clamp ke batas bawah saat menggeser keluar dari 1900", () => {
+    const result = shiftMonth("1900-01", -1);
+    expect(result).toBe("1900-01");
+    expect(parseMonthKey(result)).not.toBeNull();
+  });
+
+  it("clamp ke batas atas saat menggeser keluar dari 2999", () => {
+    const result = shiftMonth("2999-12", 1);
+    expect(result).toBe("2999-12");
+    expect(parseMonthKey(result)).not.toBeNull();
+  });
+
+  it("hasil geseran selalu bisa dipakai monthToRange tanpa jatuh diam-diam", () => {
+    for (let delta = -2000; delta <= 2000; delta += 1) {
+      const shifted = shiftMonth("1900-01", delta);
+      expect(parseMonthKey(shifted), `delta ${delta} -> ${shifted}`).not.toBeNull();
+    }
+  });
+
+  it("menggeser normal tetap akurat di dalam rentang", () => {
+    expect(shiftMonth("2026-10", -1)).toBe("2026-09");
+    expect(shiftMonth("2026-01", -1)).toBe("2025-12");
+    expect(shiftMonth("2026-12", 1)).toBe("2027-01");
+  });
+});
+
+describe("toUtcMidnight menolak tahun di luar rentang", () => {
+  // `Date.UTC` memperlakukan tahun 0-99 sebagai 1900-1999, jadi "0099" tanpa
+  // penjagaan akan diam-diam menjadi 1999.
+  it("menolak tahun dua digit yang akan di-backslide", () => {
+    expect(toUtcMidnight("0099-01-01")).toBeNull();
+    expect(toUtcMidnight("0001-01-01")).toBeNull();
+  });
+
+  it("menolak tahun sebelum 1900 dan setelah 2999", () => {
+    expect(toUtcMidnight("1899-12-31")).toBeNull();
+    expect(toUtcMidnight("3000-01-01")).toBeNull();
+  });
+
+  it("tetap menerima tahun tepat di batas", () => {
+    expect(toUtcMidnight("1900-01-01")?.toISOString()).toBe("1900-01-01T00:00:00.000Z");
+    expect(toUtcMidnight("2999-12-31")?.toISOString()).toBe("2999-12-31T00:00:00.000Z");
+  });
+});
+
 describe("formatDateShort / formatDateLong", () => {
   it("membaca tanggal menurut waktu lokal Asia/Jakarta", () => {
     // 00:00 UTC = 07:00 hari yang sama di Jakarta, jadi tidak meleset hari.

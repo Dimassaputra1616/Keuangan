@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   MAX_RUPIAH,
+  MAX_SAFE_RUPIAH,
+  accountBalanceOf,
   formatInputAmount,
   formatNumber,
   formatRupiah,
@@ -8,6 +10,7 @@ import {
   parseRupiahInput,
   parseSignedRupiahInput,
   percentage,
+  safeSum,
   signedAmount,
 } from "@/lib/money";
 
@@ -110,5 +113,78 @@ describe("percentage", () => {
     expect(percentage(1, 3)).toBe(33.3);
     expect(percentage(2, 3)).toBe(66.7);
     expect(percentage(3, 3)).toBe(100);
+  });
+});
+
+describe("safeSum", () => {
+  it("menjumlahkan nilai biasa tanpa mengubahnya", () => {
+    expect(safeSum([1_000, 2_000, 3_000])).toBe(6_000);
+    expect(safeSum([])).toBe(0);
+  });
+
+  it("menjumlahkan nilai negatif dengan benar", () => {
+    expect(safeSum([-1_000, 2_000])).toBe(1_000);
+    expect(safeSum([-1_000, -2_000])).toBe(-3_000);
+  });
+
+  // Regression: saldo akun adalah hasil penjumlahan banyak transaksi. Kalau
+  // penjumlahannya melewati batas angka yang aman, `Number` mulai kehilangan
+  // presisi dan laporan keuangan bisa meleset jauh — bukan cuma pembulatan
+  // beberapa rupiah.
+  it("tidak pernah keluar dari rentang angka yang aman saat positif meledak", () => {
+    const total = safeSum([MAX_SAFE_RUPIAH, MAX_SAFE_RUPIAH, MAX_SAFE_RUPIAH]);
+    expect(total).toBe(MAX_SAFE_RUPIAH);
+    expect(Number.isSafeInteger(total)).toBe(true);
+  });
+
+  it("menjaga sisi negatif tetap aman", () => {
+    const total = safeSum([-MAX_SAFE_RUPIAH, -MAX_SAFE_RUPIAH, -MAX_SAFE_RUPIAH]);
+    expect(total).toBe(-MAX_SAFE_RUPIAH);
+    expect(Number.isSafeInteger(total)).toBe(true);
+  });
+
+  it("jumlahkan nominal transaksi besar tetap presisi", () => {
+    // Empat transaksi di batas kolom INT 32-bit masih jauh di bawah batas
+    // angka aman, jadi hasil akhirnya harus persis, tidak dibulatkan.
+    expect(safeSum([MAX_RUPIAH, MAX_RUPIAH, MAX_RUPIAH, MAX_RUPIAH])).toBe(
+      MAX_RUPIAH * 4,
+    );
+  });
+});
+
+describe("accountBalanceOf", () => {
+  it("menghitung saldo awal + pemasukan − pengeluaran + transfer", () => {
+    expect(
+      accountBalanceOf({
+        initialBalance: 1_000_000,
+        income: 500_000,
+        expense: 200_000,
+        transferIn: 300_000,
+        transferOut: 100_000,
+      }),
+    ).toBe(1_500_000);
+  });
+
+  it("menghasilkan saldo negatif tanpa kehilangan presisi", () => {
+    expect(
+      accountBalanceOf({
+        initialBalance: 0,
+        income: 0,
+        expense: 750_000,
+        transferIn: 0,
+        transferOut: 0,
+      }),
+    ).toBe(-750_000);
+  });
+
+  it("menjaga saldo tetap di dalam rentang aman walau komponennya ekstrem", () => {
+    const balance = accountBalanceOf({
+      initialBalance: MAX_RUPIAH,
+      income: MAX_RUPIAH,
+      expense: 0,
+      transferIn: MAX_RUPIAH,
+      transferOut: 0,
+    });
+    expect(Number.isSafeInteger(balance)).toBe(true);
   });
 });

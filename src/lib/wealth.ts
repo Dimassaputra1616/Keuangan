@@ -11,6 +11,8 @@
  * akan membuat total kekayaan kurang dari kenyataan.
  */
 
+import { safeSum } from "@/lib/money";
+
 export type WealthAccount = {
   balance: number;
   isArchived: boolean;
@@ -44,12 +46,14 @@ export function calcWealth({
   let cash = 0;
   let archivedCash = 0;
 
+  // Menjumlahkan banyak akun bisa melampaui batas angka yang aman kalau saldonya
+  // sendiri sudah besar, jadi penjumlahannya dijaga dengan `safeSum`.
   for (const account of accountBalances) {
-    cash += account.balance;
-    if (account.isArchived) archivedCash += account.balance;
+    cash = safeSum([cash, account.balance]);
+    if (account.isArchived) archivedCash = safeSum([archivedCash, account.balance]);
   }
 
-  const total = cash + receivableOutstanding;
+  const total = safeSum([cash, receivableOutstanding]);
 
   return {
     cash,

@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { toUtcMidnight } from "@/lib/date";
 import { transactionFormSchema } from "@/lib/validations";
@@ -30,13 +31,14 @@ async function validateRelations(
   accountId: string,
   categoryId: string,
   kind: TransactionKind,
+  client: Pick<Prisma.TransactionClient, "account" | "category"> = db,
 ): Promise<ActionResult | null> {
   const [account, category] = await Promise.all([
-    db.account.findUnique({
+    client.account.findUnique({
       where: { id: accountId },
       select: { id: true, name: true, isArchived: true },
     }),
-    db.category.findUnique({
+    client.category.findUnique({
       where: { id: categoryId },
       select: { id: true, name: true, kind: true, isArchived: true },
     }),
@@ -89,21 +91,29 @@ export async function createTransaction(
     return actionError("Tanggal tidak valid.", { date: ["Tanggal tidak valid."] });
   }
 
-  const relationError = await validateRelations(accountId, categoryId, kind);
-  if (relationError) return relationError;
-
   try {
-    await db.transaction.create({
-      data: {
-        kind,
-        amount,
-        occurredAt,
-        description,
-        notes: notes.length > 0 ? notes : null,
-        accountId,
-        categoryId,
-      },
+    // Validasi akun & kategori DI DALAM transaksi yang sama dengan penulisan,
+    // sesuai aturan check-then-act di `AGENTS.md` §3.1.
+    const outcome = await db.$transaction(async (tx) => {
+      const relationError = await validateRelations(accountId, categoryId, kind, tx);
+      if (relationError) return { status: "error", error: relationError } as const;
+
+      await tx.transaction.create({
+        data: {
+          kind,
+          amount,
+          occurredAt,
+          description,
+          notes: notes.length > 0 ? notes : null,
+          accountId,
+          categoryId,
+        },
+      });
+
+      return { status: "ok" } as const;
     });
+
+    if (outcome.status === "error") return outcome.error;
   } catch (error) {
     return actionError(describePrismaError(error));
   }
@@ -140,22 +150,28 @@ export async function updateTransaction(
     return actionError("Tanggal tidak valid.", { date: ["Tanggal tidak valid."] });
   }
 
-  const relationError = await validateRelations(accountId, categoryId, kind);
-  if (relationError) return relationError;
-
   try {
-    await db.transaction.update({
-      where: { id },
-      data: {
-        kind,
-        amount,
-        occurredAt,
-        description,
-        notes: notes.length > 0 ? notes : null,
-        accountId,
-        categoryId,
-      },
+    const outcome = await db.$transaction(async (tx) => {
+      const relationError = await validateRelations(accountId, categoryId, kind, tx);
+      if (relationError) return { status: "error", error: relationError } as const;
+
+      await tx.transaction.update({
+        where: { id },
+        data: {
+          kind,
+          amount,
+          occurredAt,
+          description,
+          notes: notes.length > 0 ? notes : null,
+          accountId,
+          categoryId,
+        },
+      });
+
+      return { status: "ok" } as const;
     });
+
+    if (outcome.status === "error") return outcome.error;
   } catch (error) {
     return actionError(describePrismaError(error));
   }

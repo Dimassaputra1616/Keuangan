@@ -56,13 +56,14 @@ async function validateRelations(
   accountId: string,
   categoryId: string,
   kind: TransactionKind,
+  client: Pick<Prisma.TransactionClient, "account" | "category"> = db,
 ): Promise<ActionResult | null> {
   const [account, category] = await Promise.all([
-    db.account.findUnique({
+    client.account.findUnique({
       where: { id: accountId },
       select: { id: true, name: true, isArchived: true },
     }),
-    db.category.findUnique({
+    client.category.findUnique({
       where: { id: categoryId },
       select: { id: true, name: true, kind: true, isArchived: true },
     }),
@@ -149,11 +150,13 @@ export async function createReceivable(
     });
   }
 
-  const relationError = await validateRelations(accountId, categoryId, "EXPENSE");
-  if (relationError) return relationError;
-
   try {
-    await db.$transaction(async (tx) => {
+    const outcome = await db.$transaction(async (tx) => {
+      // Validasi akun & kategori DI DALAM transaksi yang sama dengan penulisan,
+      // sesuai aturan check-then-act di `AGENTS.md` §3.1.
+      const relationError = await validateRelations(accountId, categoryId, "EXPENSE", tx);
+      if (relationError) return { status: "error", error: relationError } as const;
+
       const transaction = await tx.transaction.create({
         data: {
           kind: "EXPENSE",
@@ -177,7 +180,11 @@ export async function createReceivable(
           lentTransactionId: transaction.id,
         },
       });
+
+      return { status: "ok" } as const;
     });
+
+    if (outcome.status === "error") return outcome.error;
 
     revalidateReceivable("");
     return { ok: true, message: "Piutang berhasil dicatat." };
@@ -223,14 +230,14 @@ export async function updateReceivable(
     });
   }
 
-  const relationError = await validateRelations(accountId, categoryId, "EXPENSE");
-  if (relationError) return relationError;
-
   try {
     // Pembacaan piutang dan cek "nominal >= total bayar" sengaja dilakukan DI
     // DALAM transaksi yang sama dengan penulisan. Kalau dibaca di luar, nilainya
     // bisa basi karena ada pembayaran yang masuk bersamaan.
     const outcome = await db.$transaction(async (tx) => {
+      const relationError = await validateRelations(accountId, categoryId, "EXPENSE", tx);
+      if (relationError) return { status: "error", error: relationError } as const;
+
       const receivable = await tx.receivable.findUnique({
         where: { id: receivableId },
         select: { id: true, lentTransactionId: true },
@@ -311,22 +318,37 @@ export async function toggleCancelReceivable(
   const receivableId = idParsed.data.receivableId;
 
   try {
-    const receivable = await db.receivable.findUnique({
-      where: { id: receivableId },
-      select: { isCancelled: true },
+    // Baca lalu tulis dalam satu transaksi: tanpa itu, dua klik hampir
+    // bersamaan bisa membaca `isCancelled` yang sama dan sama-sama menulis
+    // nilai yang sama, sehingga status akhir bukan yang dimaksud pengguna
+    // (aturan check-then-act di `AGENTS.md` §3.1).
+    const outcome = await db.$transaction(async (tx) => {
+      const receivable = await tx.receivable.findUnique({
+        where: { id: receivableId },
+        select: { isCancelled: true },
+      });
+
+      if (!receivable) {
+        return {
+          status: "error",
+          error: actionError("Piutang tidak ditemukan."),
+        } as const;
+      }
+
+      await tx.receivable.update({
+        where: { id: receivableId },
+        data: { isCancelled: !receivable.isCancelled },
+      });
+
+      return { status: "ok", wasCancelled: receivable.isCancelled } as const;
     });
 
-    if (!receivable) return actionError("Piutang tidak ditemukan.");
-
-    await db.receivable.update({
-      where: { id: receivableId },
-      data: { isCancelled: !receivable.isCancelled },
-    });
+    if (outcome.status === "error") return outcome.error;
 
     revalidateReceivable(receivableId);
     return {
       ok: true,
-      message: receivable.isCancelled
+      message: outcome.wasCancelled
         ? "Piutang diaktifkan kembali."
         : "Piutang dibatalkan. Transaksi kas tetap dipertahankan.",
     };
@@ -352,25 +374,45 @@ export async function deleteReceivable(
   const receivableId = idParsed.data.receivableId;
 
   try {
-    const receivable = await db.receivable.findUnique({
-      where: { id: receivableId },
-      select: { id: true, lentTransactionId: true, _count: { select: { payments: true } } },
-    });
+    // Pengecekan jumlah pembayaran dan penghapusan terjadi di transaksi yang
+    // SAMA. Kalau dibaca di luar, pembayaran bisa masuk di sela waktu sehingga
+    // piutang ikut terhapus padahal pembayarannya masih ada (aturan
+    // check-then-act di `AGENTS.md` §3.1).
+    const outcome = await db.$transaction(async (tx) => {
+      const receivable = await tx.receivable.findUnique({
+        where: { id: receivableId },
+        select: {
+          id: true,
+          lentTransactionId: true,
+          _count: { select: { payments: true } },
+        },
+      });
 
-    if (!receivable) return actionError("Piutang tidak ditemukan.");
+      if (!receivable) {
+        return {
+          status: "error",
+          error: actionError("Piutang tidak ditemukan."),
+        } as const;
+      }
 
-    if (receivable._count.payments > 0) {
-      return actionError(
-        `Piutang ini sudah punya ${receivable._count.payments} pembayaran sehingga tidak bisa dihapus. Batalkan saja bila tidak akan ditagih lagi.`,
-      );
-    }
+      if (receivable._count.payments > 0) {
+        return {
+          status: "error",
+          error: actionError(
+            `Piutang ini sudah punya ${receivable._count.payments} pembayaran sehingga tidak bisa dihapus. Batalkan saja bila tidak akan ditagih lagi.`,
+          ),
+        } as const;
+      }
 
-    await db.$transaction(async (tx) => {
       if (receivable.lentTransactionId) {
         await tx.transaction.delete({ where: { id: receivable.lentTransactionId } });
       }
       await tx.receivable.delete({ where: { id: receivableId } });
+
+      return { status: "ok" } as const;
     });
+
+    if (outcome.status === "error") return outcome.error;
 
     revalidateReceivable(receivableId);
     return { ok: true, message: "Piutang beserta transaksinya dihapus." };
@@ -415,15 +457,15 @@ export async function addPayment(
     });
   }
 
-  const relationError = await validateRelations(accountId, categoryId, "INCOME");
-  if (relationError) return relationError;
-
   try {
     // Sama seperti `updateReceivable`: validasi "tidak melebihi sisa" WAJIB
     // dihitung di dalam transaksi yang sama dengan penulisan. Sebelumnya total
     // bayar dibaca sebelum transaksi dibuka, jadi dua tab yang mengirim form
     // hampir bersamaan bisa membuat total pembayaran melebihi nominal pokok.
     const outcome = await db.$transaction(async (tx) => {
+      const relationError = await validateRelations(accountId, categoryId, "INCOME", tx);
+      if (relationError) return { status: "error", error: relationError } as const;
+
       const receivable = await tx.receivable.findUnique({
         where: { id: receivableId },
         select: {
@@ -534,19 +576,31 @@ export async function deletePayment(
   const { receivableId, paymentId } = parsed.data;
 
   try {
-    const payment = await db.receivablePayment.findUnique({
-      where: { id: paymentId },
-      select: { id: true, transactionId: true },
-    });
+    // Pembacaan `transactionId` dan penghapusan harus satu transaksi supaya
+    // tidak pernah menghapus pembayaran yang barunya sudah berubah di antara
+    // kedua langkah (aturan check-then-act di `AGENTS.md` §3.1).
+    const outcome = await db.$transaction(async (tx) => {
+      const payment = await tx.receivablePayment.findUnique({
+        where: { id: paymentId },
+        select: { id: true, transactionId: true },
+      });
 
-    if (!payment) return actionError("Pembayaran tidak ditemukan.");
+      if (!payment) {
+        return {
+          status: "error",
+          error: actionError("Pembayaran tidak ditemukan."),
+        } as const;
+      }
 
-    await db.$transaction(async (tx) => {
       if (payment.transactionId) {
         await tx.transaction.delete({ where: { id: payment.transactionId } });
       }
       await tx.receivablePayment.delete({ where: { id: paymentId } });
+
+      return { status: "ok" } as const;
     });
+
+    if (outcome.status === "error") return outcome.error;
 
     revalidateReceivable(receivableId);
     return { ok: true, message: "Pembayaran dihapus beserta transaksinya." };
