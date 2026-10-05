@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { toUtcMidnight } from "@/lib/date";
 import { MAX_RUPIAH } from "@/lib/money";
 import { isTransactionKind } from "@/lib/types";
+import { getRecentTransactions } from "@/server/queries/finance";
 
 /**
  * API untuk bot Telegram.
@@ -144,4 +145,68 @@ export async function POST(request: NextRequest) {
   });
 
   return NextResponse.json({ ok: true, transaction: created }, { status: 201 });
+}
+
+/**
+ * GET /api/bot/transaksi?limit=n — daftar transaksi terakhir.
+ * Dipakai bot Telegram untuk /riwayat (website sebagai sumber utama).
+ */
+export async function GET(request: NextRequest) {
+  if (!checkApiKey(request)) {
+    return unauthorized();
+  }
+
+  const rawLimit = request.nextUrl.searchParams.get("limit");
+  let limit = 5;
+  if (rawLimit !== null) {
+    const parsed = Number.parseInt(rawLimit, 10);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 20) {
+      return badRequest("limit harus integer 1-20.");
+    }
+    limit = parsed;
+  }
+
+  const rows = await getRecentTransactions(limit);
+  return NextResponse.json({
+    ok: true,
+    transactions: rows.map((t) => ({
+      id: t.id,
+      kind: t.kind,
+      amount: t.amount,
+      description: t.description,
+      occurredAt: t.occurredAt.toISOString().slice(0, 10),
+      category: t.category.name,
+      account: t.account.name,
+    })),
+  });
+}
+
+/**
+ * DELETE /api/bot/transaksi?id=<cuid> — hapus satu transaksi.
+ * Dipakai bot Telegram untuk /hapus. Relasi ke piutang di-set null
+ * otomatis (lihat schema), jadi aman dihapus.
+ */
+export async function DELETE(request: NextRequest) {
+  if (!checkApiKey(request)) {
+    return unauthorized();
+  }
+
+  const id = (request.nextUrl.searchParams.get("id") ?? "").trim();
+  if (!id) {
+    return badRequest("Parameter id wajib diisi.");
+  }
+
+  const existing = await db.transaction.findUnique({
+    where: { id },
+    select: { id: true },
+  });
+  if (!existing) {
+    return NextResponse.json(
+      { ok: false, error: "Transaksi tidak ditemukan." },
+      { status: 404 }
+    );
+  }
+
+  await db.transaction.delete({ where: { id } });
+  return NextResponse.json({ ok: true, id });
 }
