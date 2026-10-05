@@ -1,0 +1,161 @@
+// CATATAN PENTING
+// Prisma TIDAK mendukung `enum` pada SQLite. Semua field yang secara konsep enum
+// (Account.type, Category.kind, Transaction.kind) disimpan sebagai `String` dan
+// divalidasi dua lapis: union type di `src/lib/types.ts` + zod di `src/lib/validations/`.
+// Nilai enum yang sah didefinisikan sebagai konstanta di `src/lib/types.ts`.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// Tempat uang ditahan.
+///
+/// Saldo = initialBalance + Σincome − Σexpense + ΣtransferMasuk − ΣtransferKeluar
+model Account {
+  id             String        @id @default(cuid())
+  name           String
+  /// TUNAI | BANK | EWALLET | KREDIT
+  type           String
+  /// LIQUID | SAVINGS | GOAL_FUND | EMERGENCY. Kosong berarti belum ditentukan.
+  /// Menentukan apakah saldo akun boleh masuk hitungan "uang aman digunakan".
+  purpose        String?
+  initialBalance Int           @default(0)
+  isArchived     Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  transactions   Transaction[]
+  outgoingTransfers Transfer[] @relation("TransferOut")
+  incomingTransfers Transfer[] @relation("TransferIn")
+
+  @@index([isArchived])
+  @@index([purpose])
+}
+
+/// Perpindahan uang dari satu akun ke akun lain.
+///
+/// Sengaja TIDAK memakai tabel `Transaction`: transfer bukan pemasukan dan bukan
+/// pengeluaran, hanya berubah bentuk uang. Kalau ia dicatat sebagai dua baris
+/// `Transaction`, laporan cashflow akan salah dan total aset terhitung dua kali.
+model Transfer {
+  id            String   @id @default(cuid())
+  /// Selalu positif, rupiah penuh tanpa sen.
+  amount        Int
+  /// UTC midnight, aturan sama seperti `Transaction.occurredAt`.
+  occurredAt    DateTime
+  notes         String?
+  fromAccountId String
+  toAccountId   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  fromAccount Account @relation("TransferOut", fields: [fromAccountId], references: [id], onDelete: Restrict)
+  toAccount   Account @relation("TransferIn", fields: [toAccountId], references: [id], onDelete: Restrict)
+
+  @@index([occurredAt])
+  @@index([fromAccountId])
+  @@index([toAccountId])
+}
+
+/// Kategori transaksi. Nama boleh sama antara INCOME dan EXPENSE.
+model Category {
+  id           String        @id @default(cuid())
+  name         String
+  /// INCOME | EXPENSE
+  kind         String
+  color        String        @default("#64748b")
+  isArchived   Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  transactions Transaction[]
+
+  @@unique([name, kind])
+  @@index([kind, isArchived])
+}
+
+/// Satu aliran uang.
+/// `amount` selalu POSITIF (rupiah penuh, tanpa sen); arah aliran ada di `kind`.
+/// `occurredAt` disimpan sebagai UTC midnight dari tanggal lokal Asia/Jakarta,
+/// sehingga query rentang bulan konsisten dan transaksi tidak meleset bulan.
+model Transaction {
+  id          String   @id @default(cuid())
+  occurredAt  DateTime
+  amount      Int
+  /// INCOME | EXPENSE
+  kind        String
+  description String
+  notes       String?
+  accountId   String
+  categoryId  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  account  Account  @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  // Jejak ke piutang. `SetNull` supaya menghapus transaksi tidak ikut
+  // menghapus catatan piutang.
+  lentReceivable    Receivable?        @relation("LentTransaction")
+  paymentReceivable ReceivablePayment? @relation("PaymentTransaction")
+
+  @@index([occurredAt])
+  @@index([accountId])
+  @@index([categoryId])
+}
+
+/// Uang yang dipinjamkan ke orang lain.
+///
+/// Setiap piutang otomatis dibuatkan satu `Transaction` bertanda EXPENSE saat
+/// uangnya benar-benar keluar. Pembayaran di model `ReceivablePayment`
+/// masing-masing membuat satu Transaction INCOME. Dengan begitu arus kas tetap
+/// akurat dan sisa piutang bisa direkonsiliasi dari satu sumber data saja.
+model Receivable {
+  id         String    @id @default(cuid())
+  personName String
+  title      String
+  /// Nominal pokok yang dipinjamkan, selalu positif.
+  amount     Int
+  /// Tanggal uang keluar, UTC midnight seperti `Transaction.occurredAt`.
+  lentAt     DateTime
+  /// Jatuh tempo opsional, UTC midnight.
+  dueAt      DateTime?
+  notes      String?
+  /// Dibatalkan berarti utangnya dihapusbukukan, transaksi kas tetap dipertahankan.
+  isCancelled Boolean   @default(false)
+
+  lentTransactionId String?      @unique
+  lentTransaction   Transaction? @relation("LentTransaction", fields: [lentTransactionId], references: [id], onDelete: SetNull)
+
+  payments ReceivablePayment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isCancelled])
+  @@index([dueAt])
+}
+
+/// Satu pembayaran yang diterima terhadap sebuah piutang.
+model ReceivablePayment {
+  id           String   @id @default(cuid())
+  receivableId String
+  /// Nominal yang diterima, selalu positif dan tidak boleh melebihi sisa.
+  amount       Int
+  /// Tanggal uang masuk, UTC midnight.
+  receivedAt   DateTime
+  notes        String?
+
+  transactionId String?      @unique
+  transaction   Transaction? @relation("PaymentTransaction", fields: [transactionId], references: [id], onDelete: SetNull)
+
+  receivable Receivable @relation(fields: [receivableId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([receivableId])
+  @@index([receivedAt])
+}
