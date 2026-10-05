@@ -272,6 +272,11 @@ html.dark {
 
 body {
   min-height: 100vh;
+  /* Jaring pengaman terakhir untuk layar kecil: satu kartu atau tabel yang
+     terlalu lebar tidak boleh membuat seluruh halaman bisa digeser ke samping.
+     `overflow-wrap` sudah ditangani per komponen; ini jaring pengaman, bukan
+     pengganti perbaikannya. */
+  overflow-x: hidden;
   background-color: var(--background);
   /* Dua glow lembut + satu wash diagonal. Alphanya kecil supaya terasa
      seperti cahaya ambient, bukan bercak warna. */
@@ -294,6 +299,19 @@ body {
 /* Angka rupiah selalu rata dan mudah dibandingkan */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Nominal rupiah TIDAK BOLEH terpotong di tengah.
+ *
+ * `break-words` pada angka besar justru merusak: `Rp 2.147.483.647` akan
+ * terbelah jadi dua baris di tengah digit, jadi user membaca
+ * "Rp 2.147.483." + "647" — nominalnya terlihat jadi berbeda. Jadi angka
+ * rupiah sengaja dibiarkan panjang penuh: kalau tidak muat, kartu yang memegangnya
+ * yang mengalah lewat `min-w-0`, bukan angkanya yang dipotong.
+ */
+.rp-amount {
+  white-space: nowrap;
 }
 
 ::selection {

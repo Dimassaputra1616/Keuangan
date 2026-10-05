@@ -120,9 +120,12 @@ export function StatCard({
         ) : null}
       </div>
 
+      {/* `rp-amount` menjaga nominal rupiah tidak terbelah di tengah digit.
+          `min-w-0` supaya kartu ini boleh menyusut di dalam grid sempit
+          alih-alih memaksa halaman jadi bisa digeser ke samping. */}
       <p
         className={cx(
-          "relative mt-3 text-2xl font-semibold tracking-tight tabular-nums",
+          "rp-amount relative mt-3 min-w-0 text-[clamp(1.25rem,5.5vw,1.5rem)] font-semibold tracking-tight tabular-nums",
           styles.value,
         )}
       >

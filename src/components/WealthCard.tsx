@@ -45,7 +45,15 @@ export function WealthCard({
             </span>
           </p>
 
-          <p className="mt-2 break-words text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl lg:text-5xl">
+          {/*
+            Ukuran fontnya fluid lewat `clamp`, bukan ukuran tetap per
+            breakpoint. Alasannya nominal bisa lebih lebar di layar kecil:
+            pada 360px, `Rp 2.147.483.647` membutuhkan ~288px, sedangkan kartu
+            hanya menyisakan ~240px. Dengan `clamp` angka menyusut sendiri,
+            dan `rp-amount` memastikan nominalnya tidak pernah terbelah di
+            tengah digit.
+          */}
+          <p className="rp-amount mt-2 text-[clamp(1.5rem,7.5vw,3rem)] font-semibold tracking-tight tabular-nums sm:text-4xl lg:text-5xl">
             {formatRupiah(wealth.total)}
           </p>
 
