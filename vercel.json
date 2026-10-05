@@ -1,0 +1,1 @@
+{"buildCommand":"prisma migrate deploy && prisma db seed && next build","framework":"nextjs","installCommand":"npm install","outputDirectory":".next"}

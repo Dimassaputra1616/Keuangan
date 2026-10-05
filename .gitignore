@@ -40,3 +40,23 @@ prisma/*.db-journal
 
 # hasil `npm run db:backup` — jangan pernah ikut ter-commit
 prisma/backups/
+.vercel
+.env*
+
+# secrets lokal (jangan pernah commit)
+.bot_api_key
+.vps_basic_auth_pass
+
+# file deploy lokal / eksperimen (VM, tunnel, HF, Oracle)
+server.log
+ngrok.log
+tunnel-watchdog.sh
+start.sh
+Dockerfile
+.dockerignore
+docker-entrypoint.sh
+oracle-cloud-init.yaml
+oracle-cloud-init-FINAL.yaml
+
+# backup migrasi SQLite lama (sudah di Git history)
+prisma/migrations-sqlite-backup/

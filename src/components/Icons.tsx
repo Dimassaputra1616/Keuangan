@@ -258,3 +258,20 @@ export function IconSparkle(props: IconProps) {
     </Svg>
   );
 }
+export function IconEye(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+      <circle cx="12" cy="12" r="3" />
+    </Svg>
+  );
+}
+
+export function IconEyeOff(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M17.94 17.94A10.6 10.6 0 0 1 12 19c-6.5 0-10-7-10-7a17.6 17.6 0 0 1 4.06-4.94M9.9 4.24A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a17.7 17.7 0 0 1-2.16 3.19" />
+      <line x1="2" y1="2" x2="22" y2="22" />
+    </Svg>
+  );
+}

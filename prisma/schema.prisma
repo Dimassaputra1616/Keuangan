@@ -1,7 +1,9 @@
 // CATATAN PENTING
-// Prisma TIDAK mendukung `enum` pada SQLite. Semua field yang secara konsep enum
-// (Account.type, Category.kind, Transaction.kind) disimpan sebagai `String` dan
-// divalidasi dua lapis: union type di `src/lib/types.ts` + zod di `src/lib/validations/`.
+// Field yang secara konsep enum (Account.type, Category.kind, Transaction.kind)
+// disimpan sebagai `String` dan divalidasi dua lapis: union type di
+// `src/lib/types.ts` + zod di `src/lib/validations/`. Postgres sebenarnya
+// mendukung enum native, tapi String dipertahankan supaya validasi dan kode
+// yang ada tidak berubah.
 // Nilai enum yang sah didefinisikan sebagai konstanta di `src/lib/types.ts`.
 
 generator client {
@@ -9,7 +11,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

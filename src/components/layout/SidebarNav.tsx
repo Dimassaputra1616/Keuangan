@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LogoutButton } from "./LogoutButton";
 import { NavLinks } from "./NavLinks";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { IconSparkle } from "@/components/Icons";
@@ -40,6 +41,8 @@ export function SidebarNav() {
       >
         <NavLinks />
       </nav>
+
+      <LogoutButton />
 
       <div className="space-y-3 border-t border-sidebar-border pt-4">
         <div className="flex items-center justify-between gap-2 rounded-2xl border border-sidebar-border bg-sidebar-active/60 px-3 py-2.5 backdrop-blur-sm">
