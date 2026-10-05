@@ -264,9 +264,10 @@ export async function getTransactions(
     ...(filters.kind ? { kind: filters.kind } : {}),
     ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
     ...(filters.accountId ? { accountId: filters.accountId } : {}),
-    // Catatan: SQLite tidak mendukung `mode: "insensitive"`, jadi pencarian
-    // bersifat case-sensitive untuk huruf non-ASCII. Cukup untuk data pribadi.
-    ...(keyword ? { description: { contains: keyword } } : {}),
+    // `contains` tanpa `mode` bersifat case-sensitive. Setelah migrasi ke
+    // PostgreSQL, opsi `mode: "insensitive"` sudah tersedia di Prisma; dipakai
+    // di sini supaya pencarian juga menjangkau huruf besar di teks Indonesia.
+    ...(keyword ? { description: { contains: keyword, mode: "insensitive" } } : {}),
   };
 
   const [items, total] = await Promise.all([

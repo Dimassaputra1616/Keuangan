@@ -97,7 +97,8 @@ export default async function CategoriesPage() {
                         </div>
 
                         <details className="mt-2.5">
-                          <summary className="cursor-pointer rounded-lg px-1 py-0.5 text-xs font-medium text-muted-foreground transition hover:text-foreground">
+                          {/* Target sentuh 44px; versi lama setinggi teks saja. */}
+                          <summary className="inline-flex min-h-11 cursor-pointer items-center rounded-lg px-1 text-xs font-medium text-muted-foreground transition hover:text-foreground">
                             Ubah kategori
                           </summary>
                           <div className="mt-3 max-w-md rounded-xl border border-border bg-surface-muted p-4">
@@ -146,7 +147,7 @@ export default async function CategoriesPage() {
         Lihat kategori yang sudah dipakai di{" "}
         <Link
           href="/transaksi"
-          className="font-medium text-foreground underline underline-offset-2"
+          className="inline-flex min-h-11 items-center font-medium text-foreground underline underline-offset-2"
         >
           daftar transaksi
         </Link>

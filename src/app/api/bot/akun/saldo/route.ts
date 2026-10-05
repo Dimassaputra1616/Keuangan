@@ -67,12 +67,21 @@ export async function POST(request: NextRequest) {
   }
 
   // Cari akun (case-insensitive), buat baru bila belum ada.
-  let account = await db.account.findFirst({
-    where: {
-      name: { equals: accountName, mode: "insensitive" },
-      isArchived: false,
-    },
+  //
+  // Perbandingan dilakukan di aplikasi, bukan lewat `mode: "insensitive"`.
+  // Opsi itu hanya ada di Prisma untuk SQLite; setelah migrasi ke PostgreSQL
+  // field-nya tidak dikenali dan `tsc`/build gagal. Normalisasi huruf besar
+  // memberi hasil yang sama dan portable ke kedua database.
+  const wanted = accountName.trim().toLocaleLowerCase("id-ID");
+
+  const candidates = await db.account.findMany({
+    where: { isArchived: false },
+    select: { id: true, name: true },
   });
+
+  let account = candidates.find(
+    (row) => row.name.trim().toLocaleLowerCase("id-ID") === wanted,
+  );
   if (!account) {
     account = await db.account.create({
       data: { name: accountName, type, initialBalance: 0 },

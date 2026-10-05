@@ -18,7 +18,12 @@ export function Card({
       className={cx(
         // Garis dibuat lebih tipis dan buraman lebih kuat supaya kartu terasa
         // seperti permukaan kaca di atas latar, bukan kotak bertepi keras.
-        "rounded-card border border-border/70 bg-surface/80 shadow-card backdrop-blur-md",
+        //
+        // `min-w-0` itu wajib, bukan gaya. Tanpa itu, kartu jadi flex/grid item
+        // yang menolak menyusut, dan teks panjang di dalamnya mengabaikan
+        // `truncate`: kartu ikut melebar dan seluruh halaman bisa digeser ke
+        // samping. Diverifikasi dengan `scripts/audit-viewport.ts`.
+        "min-w-0 rounded-card border border-border/70 bg-surface/80 shadow-card backdrop-blur-md",
         padded && "p-5",
         className,
       )}
@@ -97,7 +102,7 @@ export function StatCard({
   const styles = TONE_STYLES[tone];
 
   return (
-    <div className="group relative overflow-hidden rounded-card border border-border/70 bg-surface/80 p-5 shadow-card backdrop-blur-md transition duration-300 hover:-translate-y-0.5 hover:shadow-lifted">
+    <div className="group relative min-w-0 overflow-hidden rounded-card border border-border/70 bg-surface/80 p-5 shadow-card backdrop-blur-md transition duration-300 hover:-translate-y-0.5 hover:shadow-lifted">
       <div
         aria-hidden="true"
         className={cx(

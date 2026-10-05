@@ -72,7 +72,7 @@ export default async function ReceivableDetailPage({
       <header className="space-y-3">
         <Link
           href="/piutang"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground"
+          className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground"
         >
           <IconArrowLeft className="h-4 w-4" />
           Kembali ke daftar piutang
@@ -259,7 +259,8 @@ export default async function ReceivableDetailPage({
             />
             <div className="p-5">
               <details>
-                <summary className="inline-flex cursor-pointer items-center gap-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground">
+                {/* Target sentuh 44px; versi lama setinggi teks saja. */}
+                <summary className="inline-flex min-h-11 cursor-pointer items-center gap-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground">
                   <IconPencil className="h-4 w-4" />
                   Buka formulir ubah
                 </summary>

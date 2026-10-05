@@ -183,7 +183,7 @@ export default async function DashboardPage({
             ) : null}
             <Link
               href="/piutang"
-              className="cursor-pointer font-medium text-foreground underline underline-offset-2"
+              className="inline-flex min-h-11 cursor-pointer items-center font-medium text-foreground underline underline-offset-2"
             >
               Lihat piutang
             </Link>
@@ -258,7 +258,10 @@ export default async function DashboardPage({
                 <li
                   key={account.id}
                   className={cx(
-                    "flex items-center justify-between gap-3 px-5 py-3.5 transition hover:bg-surface-hover",
+                    // `min-w-0` supaya baris boleh menyusut; tanpa itu, nama akun
+                    // panjang membuat kartu ikut melebar dan halaman bisa
+                    // digeser ke samping (lihat `scripts/audit-viewport.ts`).
+                    "flex min-w-0 items-center justify-between gap-3 px-5 py-3.5 transition hover:bg-surface-hover",
                     account.isArchived && "opacity-60",
                   )}
                 >
@@ -275,7 +278,7 @@ export default async function DashboardPage({
                           </span>
                         ) : null}
                       </p>
-                      <p className="text-xs text-subtle-foreground">
+                      <p className="truncate text-xs text-subtle-foreground">
                         {isAccountType(account.type)
                           ? ACCOUNT_TYPE_LABELS[account.type]
                           : account.type}
@@ -319,10 +322,10 @@ export default async function DashboardPage({
           ) : (
             <ul className="divide-y divide-border">
               {recent.map((transaction) => (
-                <li key={transaction.id}>
+                <li key={transaction.id} className="min-w-0">
                   <Link
                     href={`/transaksi/${transaction.id}/edit`}
-                    className="flex cursor-pointer items-center justify-between gap-3 px-5 py-3.5 transition hover:bg-surface-hover"
+                    className="flex min-w-0 cursor-pointer items-center justify-between gap-3 px-5 py-3.5 transition hover:bg-surface-hover"
                   >
                     <div className="flex min-w-0 items-center gap-3">
                       <span

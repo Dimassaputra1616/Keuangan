@@ -41,7 +41,7 @@ export default async function TransferPage() {
         <Link
           href="/transaksi"
           className={cx(
-            "inline-flex items-center gap-1.5 text-sm text-muted-foreground transition hover:text-foreground",
+            "inline-flex min-h-11 items-center gap-1.5 text-sm text-muted-foreground transition hover:text-foreground",
           )}
         >
           <IconArrowLeft className="h-4 w-4" />

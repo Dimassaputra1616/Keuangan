@@ -37,7 +37,7 @@ export default async function NewTransactionPage() {
       <header className="space-y-3">
         <Link
           href="/transaksi"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground"
+          className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground"
         >
           <IconArrowLeft className="h-4 w-4" />
           Kembali ke daftar

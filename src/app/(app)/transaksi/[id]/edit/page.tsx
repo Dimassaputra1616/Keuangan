@@ -69,7 +69,7 @@ export default async function EditTransactionPage({
       <header className="space-y-3">
         <Link
           href="/transaksi"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground"
+          className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground"
         >
           <IconArrowLeft className="h-4 w-4" />
           Kembali ke daftar
@@ -120,7 +120,7 @@ export default async function EditTransactionPage({
         Penghapusan transaksi dilakukan dari{" "}
         <Link
           href="/transaksi"
-          className="font-medium text-foreground underline underline-offset-2"
+          className="inline-flex min-h-11 items-center font-medium text-foreground underline underline-offset-2"
         >
           daftar transaksi
         </Link>

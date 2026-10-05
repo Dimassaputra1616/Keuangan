@@ -119,7 +119,10 @@ export default async function AccountsPage() {
 
                     <div className="mt-3.5 flex flex-wrap items-center gap-2">
                       <details className="w-full sm:w-auto">
-                        <summary className="cursor-pointer rounded-lg px-1 py-0.5 text-xs font-medium text-muted-foreground transition hover:text-foreground">
+                        {/* `min-h-11` + `inline-flex` supaya target sentuhnya
+                            mencapai 44px. Versi lama cuma setinggi teks (~20px),
+                            jadi sulit diklik di layar kecil. */}
+                        <summary className="inline-flex min-h-11 cursor-pointer items-center rounded-lg px-1 text-xs font-medium text-muted-foreground transition hover:text-foreground">
                           Ubah data akun
                         </summary>
                         <div className="mt-3 rounded-xl border border-border bg-surface-muted p-4">
@@ -169,7 +172,7 @@ export default async function AccountsPage() {
               Ingin langsung mencatat transaksi?{" "}
               <Link
                 href="/transaksi/baru"
-                className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2"
+                className="inline-flex min-h-11 items-center gap-1 font-medium text-foreground underline underline-offset-2"
               >
                 <IconPlus className="h-3 w-3" />
                 Buat transaksi

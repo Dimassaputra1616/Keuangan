@@ -15,6 +15,7 @@
     "db:reset": "prisma migrate reset --force",
     "db:backup": "tsx scripts/backup-db.ts",
     "db:studio": "prisma studio",
+    "audit:viewport": "tsx scripts/audit-viewport.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {
@@ -35,6 +36,7 @@
     "@types/react-dom": "^19.1.0",
     "eslint": "^9.30.0",
     "eslint-config-next": "^15.5.0",
+    "playwright": "^1.63.0",
     "postcss": "^8.5.0",
     "prisma": "^6.13.0",
     "tailwindcss": "^4.1.0",

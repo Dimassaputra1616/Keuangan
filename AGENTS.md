@@ -21,6 +21,7 @@ npm start            # jalankan hasil build
 npm run lint         # ESLint
 npm test             # Vitest, sekali jalan
 npm run test:watch   # Vitest mode watch
+npm run audit:viewport  # audit tampilan di browser (butuh `npm start` jalan)
 
 npm run db:migrate   # buat + terapkan migrasi
 npm run db:seed      # isi data awal (aman diulang)
@@ -263,7 +264,7 @@ Pakai yang sudah ada di `src/components/ui/` sebelum membuat komponen baru:
 ## 5. Tes
 
 [`vitest.config.mts`](vitest.config.mts) hanya memuat `src/**/*.test.ts`, dengan
-environment node dan tanpa mock database. **Status saat ini: 6 berkas, 89 tes,
+environment node dan tanpa mock database. **Status saat ini: 7 berkas, 109 tes,
 semua hijau.**
 
 | Berkas | Cakupan |
@@ -274,6 +275,7 @@ semua hijau.**
 | [`src/lib/transfer-rules.test.ts`](src/lib/transfer-rules.test.ts) | transfer tidak menggeser cashflow |
 | [`src/lib/available-to-spend.test.ts`](src/lib/available-to-spend.test.ts) | uang aman dipakai, dana terkunci |
 | [`src/lib/validations/transaction.test.ts`](src/lib/validations/transaction.test.ts) | skema zod |
+| [`src/lib/validations/account.test.ts`](src/lib/validations/account.test.ts) | skema zod akun, termasuk peran akun |
 
 Aturan:
 
@@ -294,9 +296,14 @@ ingat.
 
 | Jebakan | Kenapa |
 | --- | --- |
+| **`min-w-0` hilang, halaman bisa digeser ke samping** | Teks panjang di dalam `truncate` tetap membuat induknya melebar kalau induk itu flex/grid item tanpa `min-w-0`. Di HP, satu deskripsi transaksi panjang cukup membuat seluruh dashboard jadi `scrollWidth 964px` di viewport 320px. Nasuk: `Card`, `StatCard`, dan tiap `<li>`/`<Link>` di daftar. Bukti: `npm run audit:viewport`. |
+| **Target sentuh kecil lolos di kode tapi kecil di layar** | `summary` "Ubah data akun" dan link "Kembali ke daftar" cuma setinggi teks (~20px). Butuh `min-h-11`, bukan cuma `inline-flex`. |
 | **Warna status lolos di atas `surface`, tapi gagal di atas `-soft`** | Chip compact memakai `bg-income-soft`, bukan `surface`. Mengukur hanya terhadap `surface` membuat chip lolos padahal tidak terbaca. |
 | **Teks lolos di atas `surface`, gagal di atas `surface-muted`** | Bedanya hanya ~0.04 luminansi, tapi cukup untuk menembus ambang. Uji terhadap latar **paling gelap** dari yang dipakai teks itu. |
 | **`dark:` muncul diam-diam saat menambah kartu peringatan** | Amber paling sering ditulis langsung karena "kelihatan cocok untuk peringatan". Dua kartu penjelasan piutang sempat memakai `border-l-amber-400` + `dark:bg-amber-400/15`. Sekarang ada token `warning-*`; pakai itu. |
+| **`min-w-0` hilang, halaman bisa digeser ke samping** | Teks panjang di dalam `truncate` tetap membuat induknya melebar kalau induk itu flex/grid item tanpa `min-w-0`. Di HP, satu deskripsi transaksi panjang cukup membuat seluruh dashboard jadi `scrollWidth 964px` di viewport 320px. Nasuk: `Card`, `StatCard`, dan tiap `<li>`/`<Link>` di daftar. Bukti: `npm run audit:viewport`. |
+| **Target sentuh kecil lolos di kode tapi kecil di layar** | `summary` "Ubah data akun" dan link "Kembali ke daftar" cuma setinggi teks (~20px). Butuh `min-h-11`, bukan cuma `inline-flex`. |
+| **Nominal rupiah terpotong di tengah digit** | `break-words` pada angka besar justru merusak: `Rp 2.147.483.647` terbelah jadi dua baris dan terbaca sebagai jumlah berbeda. Pakai `.rp-amount` (`white-space: nowrap`) + font fluid `clamp()`. |
 | **`.next` versus `.next-build`** | `next build` dan `next dev` memakai folder berbeda lewat `distDir` di `next.config.ts`. Kalau keduanya menunjuk `.next`, chunk dev tertimpa dan muncul `Cannot find module './xxx.js'`. Jangan pernah mengarahkan env `NEXT_DIST_DIR` saat dev. |
 | **ESLint ikut memindai `.next-build`** | Nama folder `.next-build` baru ada setelah config ignore ditulis. Begitu `npm run build` pernah dijalankan, lint meledak jadi ratusan error palsu dari file hasil build. Kedua folder itu **wajib** ada di `ignores`. |
 | **`notFound()` mengembalikan HTTP 200** | Untuk route dinamis, halaman 404 kustom **tampil**, tapi status-nya tetap 200, baik di dev maupun produksi. Ini perilaku streaming bawaan Next.js (header terkirim sebelum `notFound()` dieksekusi), bukan bug aplikasi. `force-dynamic` tidak menghilangkannya. |
@@ -344,6 +351,7 @@ npm test              # tes lolos
 npm run lint          # 0 error
 npx tsc --noEmit      # 0 error
 npm run build         # build sukses
+npm run audit:viewport  # 0 temuan (butuh `npm start` jalan di terminal lain)
 ```
 
 Plus:
